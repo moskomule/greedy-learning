@@ -2,7 +2,7 @@ from homura import optim, lr_scheduler
 from homura.utils import trainer as _trainer, callbacks as _callbacks, reporter
 from homura.utils.containers import Map
 from homura.vision.data import cifar10_loaders
-from homura.vision.models.cifar import resnet20
+from homura.vision.models.cifar.resnet import resnet56
 from torch import nn
 
 from modules import NaiveGreedyModule
@@ -55,6 +55,16 @@ def greedy_loss_by_name(name):
     return f
 
 
+def generate_aux(input_size: int, input_features: int, num_classes: int,
+                 num_fully_conv: int = 3, num_fully_connected: int = 3):
+    base = [nn.AdaptiveAvgPool2d(input_size // 4)]
+    base += [nn.Sequential(nn.Conv2d(input_features, input_features, 1), nn.ReLU()) for _ in range(num_fully_conv)]
+    base += [nn.AdaptiveAvgPool2d(2), Flatten()]
+    base += [nn.Linear(4 * 16, 16 if i != (num_fully_connected - 1) else num_classes) for i in
+             range(num_fully_connected)]
+    return nn.Sequential(*base)
+
+
 if __name__ == '__main__':
     import miniargs
     from torch.nn import functional as F
@@ -66,24 +76,16 @@ if __name__ == '__main__':
     keys = ["conv1", "bn1", "relu", "layer1", "layer2", "layer3"]
 
     train_loader, test_loader = cifar10_loaders(args.batch_size)
-    resnet = module_converter(resnet20(num_classes=10), keys=keys)
+    resnet = module_converter(resnet56(num_classes=10), keys=keys)
     aux = nn.ModuleDict({
         # 32x32
-        "conv1": nn.Sequential(nn.AdaptiveAvgPool2d(8), nn.Conv2d(16, 16, 1, bias=False),
-                               nn.Conv2d(16, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
-                               Flatten(), nn.Linear(16, 10)),
+        "conv1": generate_aux(32, 16, 10),
         # 32x32
-        "layer1": nn.Sequential(nn.AdaptiveAvgPool2d(8), nn.Conv2d(16, 16, 1, bias=False),
-                                nn.Conv2d(16, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
-                                Flatten(), nn.Linear(16, 10)),
+        "layer1": generate_aux(32, 16, 10),
         # 16x16
-        "layer2": nn.Sequential(nn.AdaptiveAvgPool2d(4), nn.Conv2d(32, 16, 1, bias=False),
-                                nn.Conv2d(16, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
-                                Flatten(), nn.Linear(16, 10)),
-        # 4x4
-        "layer3": nn.Sequential(nn.AdaptiveAvgPool2d(2), nn.Conv2d(64, 16, 1, bias=False),
-                                nn.Conv2d(16, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
-                                Flatten(), nn.Linear(16, 10)),
+        "layer2": generate_aux(16, 32, 10),
+        # 8x8
+        "layer3": generate_aux(8, 64, 10),
     })
     greedy = NaiveGreedyModule(resnet, aux=aux,
                                tail=nn.Sequential(nn.AdaptiveAvgPool2d(1), Flatten(), nn.Linear(64, 10)))

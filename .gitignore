@@ -1,0 +1,15 @@
+*.egg-info
+*.egg
+.idea
+.ipynb_checkpoints/
+__pycache__/
+
+*.aux
+*.bbl
+*.blg
+*.synctex.gz
+*.xwm
+
+results/
+checkpoints/
+log/

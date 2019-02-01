@@ -1,4 +1,4 @@
-from homura import optim
+from homura import optim, lr_scheduler
 from homura.utils import trainer as _trainer, callbacks as _callbacks, reporter
 from homura.utils.containers import Map
 from homura.vision.data import cifar10_loaders
@@ -10,8 +10,9 @@ from utils import module_converter, Flatten
 
 
 class Trainer(_trainer.TrainerBase):
-    def __init__(self, model, optimizer, loss_f, callbacks):
-        super(Trainer, self).__init__(model, optimizer, loss_f, callbacks=callbacks)
+    def __init__(self, model, optimizer, loss_f, callbacks,
+                 scheduler=None):
+        super(Trainer, self).__init__(model, optimizer, loss_f, callbacks=callbacks, scheduler=scheduler)
         self.keys = list(self.model.aux.keys())
         self.keys.append(None)
 
@@ -84,7 +85,8 @@ if __name__ == '__main__':
                                        greedy_loss_by_name("layer2"),
                                        greedy_loss_by_name("layer3")],
                                       "../results")
-    trainer = Trainer(greedy, optim.Adam(lr=3e-4, weight_decay=1e-4), F.cross_entropy, callbacks=tb)
-    for _ in range(50):
+    trainer = Trainer(greedy, optim.SGD(lr=1e-1, momentum=0.9, weight_decay=1e-4), F.cross_entropy, callbacks=tb,
+                      scheduler=lr_scheduler.MultiStepLR([100, 150]))
+    for _ in range(200):
         trainer.train(train_loader)
         trainer.test(test_loader)

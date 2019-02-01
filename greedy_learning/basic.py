@@ -60,8 +60,8 @@ def generate_aux(input_size: int, input_features: int, num_classes: int,
     base = [nn.AdaptiveAvgPool2d(input_size // 4)]
     base += [nn.Sequential(nn.Conv2d(input_features, input_features, 1), nn.ReLU()) for _ in range(num_fully_conv)]
     base += [nn.AdaptiveAvgPool2d(2), Flatten()]
-    base += [nn.Linear(4 * input_features, 16 if i != (num_fully_connected - 1) else num_classes) for i in
-             range(num_fully_connected)]
+    base += [nn.Linear(4 * input_features if i == 0 else 16, 16 if i != (num_fully_connected - 1) else num_classes)
+             for i in range(num_fully_connected)]
     return nn.Sequential(*base)
 
 

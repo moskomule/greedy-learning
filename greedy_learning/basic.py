@@ -68,13 +68,21 @@ if __name__ == '__main__':
     train_loader, test_loader = cifar10_loaders(args.batch_size)
     resnet = module_converter(resnet20(num_classes=10), keys=keys)
     aux = nn.ModuleDict({
-        "conv1": nn.Sequential(nn.AdaptiveAvgPool2d(8), nn.Conv2d(16, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
+        # 32x32
+        "conv1": nn.Sequential(nn.AdaptiveAvgPool2d(8), nn.Conv2d(16, 16, 1, bias=False),
+                               nn.Conv2d(16, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
                                Flatten(), nn.Linear(16, 10)),
-        "layer1": nn.Sequential(nn.AdaptiveAvgPool2d(4), nn.Conv2d(16, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
+        # 32x32
+        "layer1": nn.Sequential(nn.AdaptiveAvgPool2d(8), nn.Conv2d(16, 16, 1, bias=False),
+                                nn.Conv2d(16, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
                                 Flatten(), nn.Linear(16, 10)),
-        "layer2": nn.Sequential(nn.AdaptiveAvgPool2d(2), nn.Conv2d(32, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
+        # 16x16
+        "layer2": nn.Sequential(nn.AdaptiveAvgPool2d(4), nn.Conv2d(32, 16, 1, bias=False),
+                                nn.Conv2d(16, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
                                 Flatten(), nn.Linear(16, 10)),
-        "layer3": nn.Sequential(nn.AdaptiveAvgPool2d(2), nn.Conv2d(64, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
+        # 4x4
+        "layer3": nn.Sequential(nn.AdaptiveAvgPool2d(2), nn.Conv2d(64, 16, 1, bias=False),
+                                nn.Conv2d(16, 16, 1, bias=False), nn.AdaptiveAvgPool2d(1),
                                 Flatten(), nn.Linear(16, 10)),
     })
     greedy = NaiveGreedyModule(resnet, aux=aux,
@@ -85,6 +93,7 @@ if __name__ == '__main__':
                                        greedy_loss_by_name("layer2"),
                                        greedy_loss_by_name("layer3")],
                                       "../results")
+    tb.enable_report_params()
     trainer = Trainer(greedy, optim.SGD(lr=1e-1, momentum=0.9, weight_decay=1e-4), F.cross_entropy, callbacks=tb,
                       scheduler=lr_scheduler.MultiStepLR([100, 150]))
     for _ in range(200):

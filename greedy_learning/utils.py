@@ -9,6 +9,7 @@ def module_converter(module: nn.Module, keys: Iterable[str]) -> nn.ModuleDict:
     for n, m in module.named_modules():
         if n in keys:
             base.update({n: m})
+
     return base
 
 

@@ -7,6 +7,7 @@ from torch import nn
 
 from modules import NaiveGreedyModule
 from utils import module_converter, Flatten
+from tqdm import trange
 
 
 class Trainer(_trainer.TrainerBase):
@@ -60,8 +61,10 @@ def generate_aux(input_size: int, input_features: int, num_classes: int,
     base = [nn.AdaptiveAvgPool2d(input_size // 4)]
     base += [nn.Sequential(nn.Conv2d(input_features, input_features, 1), nn.ReLU()) for _ in range(num_fully_conv)]
     base += [nn.AdaptiveAvgPool2d(2), Flatten()]
-    base += [nn.Linear(4 * input_features if i == 0 else 16, 16 if i != (num_fully_connected - 1) else num_classes)
-             for i in range(num_fully_connected)]
+    base += [nn.Sequential(nn.Linear(4 * input_features if i == 0 else 16, 16),
+                           nn.ReLU())
+             for i in range(num_fully_connected - 1)]
+    base += [nn.Linear(16, num_classes)]
     return nn.Sequential(*base)
 
 
@@ -89,6 +92,7 @@ if __name__ == '__main__':
     })
     greedy = NaiveGreedyModule(resnet, aux=aux,
                                tail=nn.Sequential(nn.AdaptiveAvgPool2d(1), Flatten(), nn.Linear(64, 10)))
+    print(greedy)
     tb = reporter.TensorboardReporter([_callbacks.LossCallback(), _callbacks.AccuracyCallback(),
                                        greedy_loss_by_name("conv1"),
                                        greedy_loss_by_name("layer1"),
@@ -98,6 +102,6 @@ if __name__ == '__main__':
     tb.enable_report_params()
     trainer = Trainer(greedy, optim.SGD(lr=1e-1, momentum=0.9, weight_decay=1e-4), F.cross_entropy, callbacks=tb,
                       scheduler=lr_scheduler.MultiStepLR([100, 150]))
-    for _ in range(200):
+    for _ in trange(200, ncols=80):
         trainer.train(train_loader)
         trainer.test(test_loader)

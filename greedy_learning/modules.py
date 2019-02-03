@@ -9,7 +9,7 @@ from torch import nn
 class GreedyModuleBase(nn.Module):
     def __init__(self, module: nn.Module, aux: nn.Module, tail: nn.Module):
         """
-        naive implementation of greedy-learning
+        naive implementation of model-learning
         :param module: nn.ModuleDict. module can be expressed as nn.Sequential
         :param aux: nn.ModuleDict.
         :param tail: nn.Module. The rest part
@@ -41,7 +41,7 @@ class GreedyModuleBase(nn.Module):
 class NaiveGreedyModule(GreedyModuleBase):
     def __init__(self, module: nn.Module, aux: nn.Module, tail: nn.Module):
         """
-        naive implementation of greedy-learning
+        naive implementation of model-learning
         :param module: nn.ModuleDict. module can be expressed as nn.Sequential
         :param aux: nn.ModuleDict.
         :param tail: nn.Module. The rest part

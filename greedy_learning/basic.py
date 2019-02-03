@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from homura import optim, lr_scheduler
 from homura.utils import trainer as _trainer, callbacks as _callbacks, reporter
 from homura.utils.containers import Map
@@ -59,7 +61,8 @@ def greedy_loss_by_name(name):
 def generate_aux(input_size: int, input_features: int, num_classes: int,
                  num_fully_conv: int = 3, num_fully_connected: int = 3):
     base = [nn.AdaptiveAvgPool2d(input_size // 4)]
-    base += [nn.Sequential(nn.Conv2d(input_features, input_features, 1), nn.ReLU()) for _ in range(num_fully_conv)]
+    base += [nn.Sequential(nn.Conv2d(input_features, input_features, 1, bias=False), nn.ReLU())
+             for _ in range(num_fully_conv)]
     base += [nn.AdaptiveAvgPool2d(2), Flatten()]
     base += [nn.Sequential(nn.Linear(4 * input_features if i == 0 else 16, 16),
                            nn.ReLU())
@@ -74,16 +77,19 @@ if __name__ == '__main__':
 
     p = miniargs.ArgumentParser()
     p.add_int("--batch_size", default=128)
+    p.add_int("--epochs", default=300)
     p.add_str("--optimizer", choices=["sgd", "adam"])
+    p.add_float("--lr", default=1e-2)
+    p.add_multi_str("--group", default=["conv1", "layer1", "layer2", "layer3"])
+    p.add_int("--step", default=50)
     args = p.parse()
 
-    keys = ["conv1", "bn1", "relu", "layer1", "layer2", "layer3"]
     optimizer = {"adam": optim.Adam(lr=3e-4, weight_decay=5e-4),
-                 "sgd": optim.SGD(lr=1e-1, momentum=0.9, weight_decay=5e-4)}[args.optimizer]
+                 "sgd": optim.SGD(lr=args.lr, momentum=0.9, weight_decay=5e-4)}[args.optimizer]
 
     train_loader, test_loader = cifar10_loaders(args.batch_size)
-    resnet = module_converter(resnet56(num_classes=10), keys=keys)
-    aux = nn.ModuleDict({
+    resnet = module_converter(resnet56(num_classes=10), keys=["conv1", "bn1", "relu", "layer1", "layer2", "layer3"])
+    aux = nn.ModuleDict(OrderedDict({k: v for k, v in {
         # 32x32
         "conv1": generate_aux(32, 16, 10),
         # 32x32
@@ -92,19 +98,17 @@ if __name__ == '__main__':
         "layer2": generate_aux(16, 32, 10),
         # 8x8
         "layer3": generate_aux(8, 64, 10),
-    })
+    }.items() if k in args.group}))
     model = NaiveGreedyModule(resnet, aux=aux,
                               tail=nn.Sequential(nn.AdaptiveAvgPool2d(1), Flatten(), nn.Linear(64, 10)))
+    print(args)
     print(model)
-    tb = reporter.TensorboardReporter([_callbacks.LossCallback(), _callbacks.AccuracyCallback(),
-                                       greedy_loss_by_name("conv1"),
-                                       greedy_loss_by_name("layer1"),
-                                       greedy_loss_by_name("layer2"),
-                                       greedy_loss_by_name("layer3")],
+    greedy_loss = [greedy_loss_by_name(name) for name in args.group]
+    tb = reporter.TensorboardReporter([_callbacks.LossCallback(), _callbacks.AccuracyCallback()] + greedy_loss,
                                       "../results")
     tb.enable_report_params()
     trainer = Trainer(model, optimizer, F.cross_entropy, callbacks=tb,
-                      scheduler=lr_scheduler.StepLR(15, 0.2) if args.optimizer == "sgd" else None)
-    for _ in trange(200, ncols=80):
+                      scheduler=lr_scheduler.StepLR(args.step, 0.2) if args.optimizer == "sgd" else None)
+    for _ in trange(args.epochs, ncols=80):
         trainer.train(train_loader)
         trainer.test(test_loader)

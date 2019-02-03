@@ -4,10 +4,10 @@ from homura.utils.containers import Map
 from homura.vision.data import cifar10_loaders
 from homura.vision.models.cifar.resnet import resnet56
 from torch import nn
+from tqdm import trange
 
 from modules import NaiveGreedyModule
 from utils import module_converter, Flatten
-from tqdm import trange
 
 
 class Trainer(_trainer.TrainerBase):
@@ -74,9 +74,12 @@ if __name__ == '__main__':
 
     p = miniargs.ArgumentParser()
     p.add_int("--batch_size", default=128)
+    p.add_str("--optimizer", choices=["sgd", "adam"])
     args = p.parse()
 
     keys = ["conv1", "bn1", "relu", "layer1", "layer2", "layer3"]
+    optimizer = {"adam": optim.Adam(lr=3e-4, weight_decay=5e-4),
+                 "sgd": optim.SGD(lr=1e-1, momentum=0.9, weight_decay=5e-4)}[args.optimizer]
 
     train_loader, test_loader = cifar10_loaders(args.batch_size)
     resnet = module_converter(resnet56(num_classes=10), keys=keys)
@@ -90,9 +93,9 @@ if __name__ == '__main__':
         # 8x8
         "layer3": generate_aux(8, 64, 10),
     })
-    greedy = NaiveGreedyModule(resnet, aux=aux,
-                               tail=nn.Sequential(nn.AdaptiveAvgPool2d(1), Flatten(), nn.Linear(64, 10)))
-    print(greedy)
+    model = NaiveGreedyModule(resnet, aux=aux,
+                              tail=nn.Sequential(nn.AdaptiveAvgPool2d(1), Flatten(), nn.Linear(64, 10)))
+    print(model)
     tb = reporter.TensorboardReporter([_callbacks.LossCallback(), _callbacks.AccuracyCallback(),
                                        greedy_loss_by_name("conv1"),
                                        greedy_loss_by_name("layer1"),
@@ -100,8 +103,8 @@ if __name__ == '__main__':
                                        greedy_loss_by_name("layer3")],
                                       "../results")
     tb.enable_report_params()
-    trainer = Trainer(greedy, optim.SGD(lr=1e-1, momentum=0.9, weight_decay=1e-4), F.cross_entropy, callbacks=tb,
-                      scheduler=lr_scheduler.MultiStepLR([100, 150]))
+    trainer = Trainer(model, optimizer, F.cross_entropy, callbacks=tb,
+                      scheduler=lr_scheduler.StepLR(15, 0.2) if args.optimizer == "sgd" else None)
     for _ in trange(200, ncols=80):
         trainer.train(train_loader)
         trainer.test(test_loader)

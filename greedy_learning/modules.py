@@ -62,6 +62,7 @@ class NaiveGreedyModule(GreedyModuleBase):
 
     def forward_train(self, input: torch.Tensor or Map, key: Optional[str]):
         x, start = (input.features, input.start) if isinstance(input, Map) else (input, 0)
+        self.train()
         for _key in self.keys[start:-1]:
             with torch.set_grad_enabled(_key == key):
                 x = self.module[_key](x)

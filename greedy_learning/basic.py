@@ -40,8 +40,8 @@ class Trainer(_trainer.TrainerBase):
 
             self.optimizer.zero_grad()
             loss.backward()
-            self.optimizer.step()
             input.features.detach_()
+        self.optimizer.step()
 
         output_map.output = input.pred  # last one
         output_map.loss = output_map.pop(f"loss_{None}")
@@ -84,8 +84,8 @@ if __name__ == '__main__':
     p.add_int("--step", default=50)
     args = p.parse()
 
-    optimizer = {"adam": optim.Adam(lr=3e-4, weight_decay=5e-4),
-                 "sgd": optim.SGD(lr=args.lr, momentum=0.9, weight_decay=5e-4)}[args.optimizer]
+    optimizer = {"adam": optim.Adam(lr=3e-4, weight_decay=1e-4),
+                 "sgd": optim.SGD(lr=args.lr, momentum=0.9, weight_decay=1e-4)}[args.optimizer]
 
     train_loader, test_loader = cifar10_loaders(args.batch_size)
     resnet = module_converter(resnet56(num_classes=10), keys=["conv1", "bn1", "relu", "layer1", "layer2", "layer3"])
@@ -102,11 +102,11 @@ if __name__ == '__main__':
     model = NaiveGreedyModule(resnet, aux=aux,
                               tail=nn.Sequential(nn.AdaptiveAvgPool2d(1), Flatten(), nn.Linear(64, 10)))
     print(args)
-    print(model)
+    # print(model)
     greedy_loss = [greedy_loss_by_name(name) for name in args.group]
     tb = reporter.TensorboardReporter([_callbacks.LossCallback(), _callbacks.AccuracyCallback()] + greedy_loss,
                                       "../results")
-    tb.enable_report_params()
+    # tb.enable_report_params()
     trainer = Trainer(model, optimizer, F.cross_entropy, callbacks=tb,
                       scheduler=lr_scheduler.StepLR(args.step, 0.2) if args.optimizer == "sgd" else None)
     for _ in trange(args.epochs, ncols=80):

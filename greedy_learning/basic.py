@@ -38,10 +38,12 @@ class Trainer(_trainer.TrainerBase):
             loss = self.loss_f(input.pred, target)
             output_map[f"loss_{key}"] = loss
 
-            self.optimizer.zero_grad()
             loss.backward()
             input.features.detach_()
+            input.features.clone()
+
         self.optimizer.step()
+        self.optimizer.zero_grad()
 
         output_map.output = input.pred  # last one
         output_map.loss = output_map.pop(f"loss_{None}")
@@ -67,7 +69,7 @@ def generate_aux(input_size: int, input_features: int, num_classes: int,
     base += [nn.Sequential(nn.Linear(4 * input_features if i == 0 else 16, 16),
                            nn.ReLU())
              for i in range(num_fully_connected - 1)]
-    base += [nn.Linear(16, num_classes)]
+    base += [nn.Linear(4 * input_features if num_fully_connected == 1 else 16, num_classes)]
     return nn.Sequential(*base)
 
 
@@ -82,6 +84,8 @@ if __name__ == '__main__':
     p.add_float("--lr", default=1e-2)
     p.add_multi_str("--group", default=["conv1", "layer1", "layer2", "layer3"])
     p.add_int("--step", default=50)
+    p.add_int("--num_convs", default=3)
+    p.add_int("--num_fcs", default=3)
     args = p.parse()
 
     optimizer = {"adam": optim.Adam(lr=3e-4, weight_decay=1e-4),
@@ -91,16 +95,22 @@ if __name__ == '__main__':
     resnet = module_converter(resnet56(num_classes=10), keys=["conv1", "bn1", "relu", "layer1", "layer2", "layer3"])
     aux = nn.ModuleDict(OrderedDict({k: v for k, v in {
         # 32x32
-        "conv1": generate_aux(32, 16, 10),
+        "conv1": generate_aux(32, 16, 10, args.num_convs, args.num_fcs),
         # 32x32
-        "layer1": generate_aux(32, 16, 10),
+        "layer1": generate_aux(32, 16, 10, args.num_convs, args.num_fcs),
         # 16x16
-        "layer2": generate_aux(16, 32, 10),
+        "layer2": generate_aux(16, 32, 10, args.num_convs, args.num_fcs),
         # 8x8
-        "layer3": generate_aux(8, 64, 10),
+        "layer3": generate_aux(8, 64, 10, args.num_convs, args.num_fcs),
     }.items() if k in args.group}))
     model = NaiveGreedyModule(resnet, aux=aux,
                               tail=nn.Sequential(nn.AdaptiveAvgPool2d(1), Flatten(), nn.Linear(64, 10)))
+
+    # import torch
+    # from homura.debug import module_debugger as simple_debugger
+    # simple_debugger(model, (torch.randn(1, 3, 32, 32), "layer1"), target=torch.tensor([1]),
+    #                 loss=lambda x, y: F.cross_entropy(x.pred, y))
+
     print(args)
     # print(model)
     greedy_loss = [greedy_loss_by_name(name) for name in args.group]

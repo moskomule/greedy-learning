@@ -61,15 +61,19 @@ def greedy_loss_by_name(name):
 
 
 def generate_aux(input_size: int, input_features: int, num_classes: int,
-                 num_fully_conv: int = 3, num_fully_connected: int = 3):
+                 num_fully_conv: int = 3, num_fully_connected: int = 3,
+                 num_fully_connected_features: int = 32):
     base = [nn.AdaptiveAvgPool2d(input_size // 4)]
-    base += [nn.Sequential(nn.Conv2d(input_features, input_features, 1, bias=False), nn.ReLU())
+    base += [nn.Sequential(nn.Conv2d(input_features, input_features, 1, bias=False),
+                           nn.BatchNorm2d(input_features),
+                           nn.ReLU())
              for _ in range(num_fully_conv)]
     base += [nn.AdaptiveAvgPool2d(2), Flatten()]
-    base += [nn.Sequential(nn.Linear(4 * input_features if i == 0 else 16, 16),
-                           nn.ReLU())
+    base += [nn.Sequential(nn.Linear(4 * input_features if i == 0 else num_fully_connected_features,
+                                     num_fully_connected_features),
+                           nn.BatchNorm2d(num_fully_connected_features))
              for i in range(num_fully_connected - 1)]
-    base += [nn.Linear(4 * input_features if num_fully_connected == 1 else 16, num_classes)]
+    base += [nn.Linear(4 * input_features if num_fully_connected == 1 else num_fully_connected_features, num_classes)]
     return nn.Sequential(*base)
 
 

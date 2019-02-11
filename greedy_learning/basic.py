@@ -71,7 +71,7 @@ def generate_aux(input_size: int, input_features: int, num_classes: int,
     base += [nn.AdaptiveAvgPool2d(2), Flatten()]
     base += [nn.Sequential(nn.Linear(4 * input_features if i == 0 else num_fully_connected_features,
                                      num_fully_connected_features),
-                           nn.BatchNorm2d(num_fully_connected_features))
+                           nn.BatchNorm1d(num_fully_connected_features))
              for i in range(num_fully_connected - 1)]
     base += [nn.Linear(4 * input_features if num_fully_connected == 1 else num_fully_connected_features, num_classes)]
     return nn.Sequential(*base)
